@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Chatnova</title>
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#0d1117">
+    
+    <style>
+        :root {
+            --bg-color: #0d1117;
+            --sidebar-bg: #111418;
+            --chat-bg: #0d1117;
+            --text-color: #f0f6fc;
+            --accent-blue: #3b82f6;
+            --accent-red: #ef4444;
+            --border-color: #21262d;
+            --overlay-color: rgba(0, 0, 0, 0.5);
+            --sidebar-width: 280px;
+        }
+
+        body.light {
+            --bg-color: #ffffff;
+            --sidebar-bg: #f0f2f5;
+            --chat-bg: #ffffff;
+            --text-color: #1f2328;
+            --border-color: #d0d7de;
+            --overlay-color: rgba(0, 0, 0, 0.3);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .sidebar-overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background-color: var(--overlay-color);
+            z-index: 99; opacity: 0; visibility: hidden;
+            transition: opacity 0.3s ease, visibility 0.3s ease;
+        }
+
+        body.sidebar-open .sidebar-overlay { opacity: 1; visibility: visible; }
+
+        .sidebar {
+            position: fixed;
+            top: 0; left: calc(-1 * var(--sidebar-width));
+            width: var(--sidebar-width); height: 100%;
+            background-color: var(--sidebar-bg);
+            border-right: 1px solid var(--border-color);
+            display: flex; flex-direction: column; justify-content: space-between;
+            z-index: 100; transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 2px 0 10px rgba(0,0,0,0.2);
+        }
+
+        body.sidebar-open .sidebar { left: 0; }
+
+        .sidebar-header {
+            padding: 16px; display: flex; align-items: center; justify-content: space-between;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .logo-container { display: flex; align-items: center; gap: 10px; }
+        .sidebar-header svg { width: 28px; height: 28px; }
+        .sidebar-header h1 { font-size: 1.1rem; font-weight: 700; letter-spacing: -0.5px; }
+
+        .close-sidebar-btn {
+            background: none; border: none; color: var(--text-color);
+            font-size: 1.3rem; cursor: pointer; opacity: 0.7; padding: 4px;
+        }
+        .close-sidebar-btn:hover { opacity: 1; }
+
+        .new-chat-btn {
+            margin: 12px 16px; padding: 10px;
+            background: linear-gradient(135deg, var(--accent-blue), var(--accent-red));
+            color: white; border: none; border-radius: 6px; font-weight: 600;
+            cursor: pointer; text-align: center; font-size: 0.9rem;
+        }
+
+        .chat-list { flex: 1; overflow-y: auto; padding: 0 12px; }
+
+        .chat-item {
+            padding: 10px 12px; border-radius: 6px; margin-bottom: 2px;
+            cursor: pointer; display: flex; justify-content: space-between; align-items: center;
+            font-size: 0.85rem; color: rgba(240, 246, 252, 0.8);
+        }
+
+        .chat-item:hover, .chat-item.active {
+            background-color: rgba(255, 255, 255, 0.03); color: var(--text-color);
+        }
+
+        .chat-actions { display: flex; gap: 4px; opacity: 0; transition: opacity 0.2s ease; }
+        .chat-item:hover .chat-actions { opacity: 0.7; }
+        .chat-actions button { background: none; border: none; color: var(--text-color); cursor: pointer; font-size: 0.8rem; padding: 2px; }
+
+        .sidebar-footer {
+            padding: 12px 16px; border-top: 1px solid var(--border-color);
+            display: flex; flex-direction: column; gap: 4px;
+        }
+
+        .footer-btn {
+            background: none; border: none; color: var(--text-color);
+            display: flex; align-items: center; gap: 10px; padding: 8px;
+            cursor: pointer; border-radius: 6px; width: 100%; font-size: 0.85rem; opacity: 0.8;
+        }
+        .footer-btn:hover { background-color: rgba(255, 255, 255, 0.03); opacity: 1; }
+
+        .chat-container {
+            flex: 1; display: flex; flex-direction: column;
+            background-color: var(--chat-bg); height: 100%; position: relative; z-index: 1;
+        }
+
+        .mobile-header {
+            height: 50px; display: flex; align-items: center; padding: 0 16px;
+            border-bottom: 1px solid var(--border-color); background-color: var(--sidebar-bg);
+        }
+
+        @media (min-width: 768px) { .mobile-header { display: none; } }
+
+        .menu-toggle-btn { background: none; border: none; color: var(--text-color); font-size: 1.2rem; cursor: pointer; margin-right: 12px; }
+        .mobile-header h2 { font-size: 1rem; font-weight: 600; }
+
+        .chat-messages {
+            flex: 1; overflow-y: auto; padding: 20px 16px;
+            display: flex; flex-direction: column; gap: 20px;
+        }
+
+        .message-wrapper { display: flex; gap: 12px; max-width: 85%; }
+        .message-wrapper.user { align-self: flex-end; flex-direction: row-reverse; }
+        .message-wrapper.bot { align-self: flex-start; }
+
+        .avatar {
+            width: 30px; height: 30px; border-radius: 4px;
+            display: flex; align-items: center; justify-content: center;
+            font-weight: bold; font-size: 0.8rem; flex-shrink: 0;
+        }
+        .avatar.user { background-color: var(--border-color); color: var(--text-color); }
+        .avatar.bot { background: linear-gradient(135deg, var(--accent-blue), var(--accent-red)); color: white; }
+
+        .message { padding: 10px 14px; border-radius: 8px; font-size: 0.9rem; line-height: 1.5; word-wrap: break-word; white-space: pre-wrap; }
+        .message-wrapper.user .message { background-color: var(--accent-blue); color: white; border-top-right-radius: 2px; }
+        .message-wrapper.bot .message { background-color: rgba(255,255,255,0.03); border: 1px solid var(--border-color); border-top-left-radius: 2px; }
+
+        /* Våg-animation för tänkande (prickar) */
+        .typing-indicator {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            padding: 6px 2px;
+        }
+        .typing-indicator span {
+            width: 7px;
+            height: 7px;
+            background-color: var(--text-color);
+            border-radius: 50%;
+            opacity: 0.4;
+            animation: wave 1.2s infinite ease-in-out;
+        }
+        .typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
+        .typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
+
+        @keyframes wave {
+            0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+            30% { transform: translateY(-6px); opacity: 1; }
+        }
+
+        .generated-image {
+            max-width: 100%; border-radius: 8px; margin-top: 10px;
+            border: 1px solid var(--border-color); display: block;
+        }
+
+        .chat-input-area {
+            padding: 16px; border-top: 1px solid var(--border-color);
+            display: flex; gap: 10px; background-color: var(--chat-bg);
+        }
+
+        .input-wrapper { flex: 1; position: relative; }
+        .chat-input-area input {
+            width: 100%; padding: 12px 14px; border-radius: 24px; border: 1px solid var(--border-color);
+            background-color: var(--sidebar-bg); color: var(--text-color); font-size: 0.95rem; outline: none;
+        }
+        .chat-input-area input:focus { border-color: var(--accent-blue); }
+
+        .send-btn { background: none; border: none; color: var(--accent-blue); font-size: 1.2rem; cursor: pointer; opacity: 0.5; padding: 0 10px; }
+        .send-btn.active { opacity: 1; }
+
+        .modal {
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background-color: rgba(0,0,0,0.7); justify-content: center; align-items: center; z-index: 200;
+        }
+        .modal-content {
+            background-color: var(--sidebar-bg); border: 1px solid var(--border-color);
+            padding: 24px; border-radius: 12px; width: 90%; max-width: 360px; display: flex; flex-direction: column; gap: 16px;
+        }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; }
+        .modal-header h2 { font-size: 1.1rem; font-weight: 600; }
+        .close-modal-btn { background: none; border: none; color: var(--text-color); font-size: 1.2rem; cursor: pointer; opacity: 0.7; }
+        .setting-group { display: flex; flex-direction: column; gap: 6px; }
+        .setting-group label { font-size: 0.8rem; opacity: 0.8; }
+        .setting-group select { padding: 10px; border-radius: 6px; border: 1px solid var(--border-color); background-color: var(--bg-color); color: var(--text-color); }
+    </style>
+</head>
+<body>
+
+    <div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
+
+    <div class="sidebar" id="sidebar">
+        <div>
+            <div class="sidebar-header">
+                <div class="logo-container">
+                    <svg viewBox="0 0 512 512">
+                        <defs>
+                            <linearGradient id="bGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" stop-color="#3b82f6" /><stop offset="100%" stop-color="#1d4ed8" />
+                            </linearGradient>
+                            <linearGradient id="rGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" stop-color="#ef4444" /><stop offset="100%" stop-color="#b91c1c" />
+                            </linearGradient>
+                        </defs>
+                        <rect width="512" height="512" rx="112" fill="#161b22" />
+                        <path d="M 156 170 C 156 142, 178 120, 206 120 L 306 120 C 334 120, 356 142, 356 170 L 356 270 C 356 298, 334 320, 306 320 L 260 320 L 210 370 L 210 320 L 206 320 C 178 320, 156 298, 156 270 Z" fill="url(#bGrad)" opacity="0.9" />
+                        <path d="M 256 170 C 270 210, 290 230, 330 244 C 290 258, 270 278, 256 318 C 242 278, 222 258, 182 244 C 222 230, 242 210, 256 170 Z" fill="url(#rGrad)" />
+                    </svg>
+                    <h1>Chatnova</h1>
+                </div>
+                <button class="close-sidebar-btn" onclick="closeSidebar()">✕</button>
+            </div>
+            <button class="new-chat-btn" onclick="createNewChat()">+ Ny chatt</button>
+            <div class="chat-list" id="chatList"></div>
+        </div>
+
+        <div class="sidebar-footer">
+            <button class="footer-btn" onclick="openSettings()">⚙️ Inställningar</button>
+            <button class="footer-btn" onclick="switchAccount()">👤 Mitt konto</button>
+        </div>
+    </div>
+
+    <div class="chat-container">
+        <div class="mobile-header">
+            <button class="menu-toggle-btn" onclick="openSidebar()">☰</button>
+            <h2>Chatnova</h2>
+        </div>
+
+        <div class="chat-messages" id="chatMessages">
+            <div class="message-wrapper bot">
+                <div class="avatar bot">C</div>
+                <div class="message">Hej! Jag är Chatnova, skapad av Blueforge studios och redforge studios. Skriv "vad kan du göra" för att se mina funktioner!</div>
+            </div>
+        </div>
+        <div class="chat-input-area">
+            <div class="input-wrapper">
+                <input type="text" id="userInput" placeholder="Fråga vad som helst!" onkeypress="handleKeyPress(event)" oninput="toggleSendBtn()">
+            </div>
+            <button class="send-btn" id="sendBtn" onclick="sendMessage()">➤</button>
+        </div>
+    </div>
+
+    <div class="modal" id="settingsModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Inställningar</h2>
+                <button class="close-modal-btn" onclick="closeSettings()">✕</button>
+            </div>
+            <div class="setting-group">
+                <label>Tema</label>
+                <select id="themeSelect" onchange="changeTheme(this.value)">
+                    <option value="dark">Mörkt (Standard)</option>
+                    <option value="light">Ljust</option>
+                </select>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let chats = JSON.parse(localStorage.getItem('chatnova_chats')) || [{ id: Date.now(), name: "Ny chatt", messages: [] }];
+        let currentChatId = chats[0].id;
+        let touchstartX = 0, touchendX = 0;
+
+        const chatContainer = document.querySelector('.chat-container');
+        chatContainer.addEventListener('touchstart', e => { touchstartX = e.changedTouches[0].screenX; });
+        chatContainer.addEventListener('touchend', e => {
+            touchendX = e.changedTouches[0].screenX;
+            if (touchendX - touchstartX > 70 && touchstartX < 100) openSidebar();
+            if (touchendX - touchstartX < -70 && document.body.classList.contains('sidebar-open')) closeSidebar();
+        });
+
+        function openSidebar() { document.body.classList.add('sidebar-open'); }
+        function closeSidebar() { document.body.classList.remove('sidebar-open'); }
+
+        function createNewChat() {
+            const newChat = { id: Date.now(), name: "Ny chatt", messages: [] };
+            chats.unshift(newChat);
+            currentChatId = newChat.id;
+            saveAndRender();
+            clearMessages();
+            closeSidebar();
+        }
+
+        function switchChat(id) {
+            currentChatId = id;
+            const chat = chats.find(c => c.id === id);
+            renderMessages(chat.messages);
+            renderChatList();
+            closeSidebar();
+        }
+
+        function renameChat(id) {
+            const chat = chats.find(c => c.id === id);
+            const newName = prompt("Byt namn på chatt:", chat.name);
+            if (newName && newName.trim()) { chat.name = newName.trim(); saveAndRender(); }
+        }
+
+        function deleteChat(id) {
+            if(confirm("Är du säker på att du vill radera denna chatt?")) {
+                chats = chats.filter(c => c.id !== id);
+                if (chats.length === 0) createNewChat();
+                else if (currentChatId === id) switchChat(chats[0].id);
+                saveAndRender();
+            }
+        }
+
+        function saveAndRender() {
+            localStorage.setItem('chatnova_chats', JSON.stringify(chats));
+            renderChatList();
+        }
+
+        function renderChatList() {
+            const list = document.getElementById('chatList');
+            list.innerHTML = '';
+            chats.forEach(chat => {
+                const isActive = chat.id === currentChatId ? 'active' : '';
+                list.innerHTML += `
+                    <div class="chat-item ${isActive}" onclick="switchChat(${chat.id})">
+                        <span>${chat.name}</span>
+                        <div class="chat-actions">
+                            <button onclick="event.stopPropagation(); renameChat(${chat.id})">✏️</button>
+                            <button onclick="event.stopPropagation(); deleteChat(${chat.id})">🗑</button>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+
+        function renderMessages(messages) {
+            const div = document.getElementById('chatMessages');
+            div.innerHTML = '';
+            if (messages.length === 0) { clearMessages(); return; }
+            messages.forEach(msg => addMessageToDom(msg.sender, msg.text, msg.imageUrl));
+            div.scrollTop = div.scrollHeight;
+        }
+
+        function clearMessages() {
+            renderMessages([{sender: 'bot', text: 'Hej! Jag är Chatnova, skapad av Blueforge studios och redforge studios. Skriv "vad kan du göra" för att se mina funktioner!'}]);
+        }
+
+        function toggleSendBtn() {
+            const input = document.getElementById('userInput');
+            const btn = document.getElementById('sendBtn');
+            if (input.value.trim()) btn.classList.add('active');
+            else btn.classList.remove('active');
+        }
+
+        async function sendMessage() {
+            const input = document.getElementById('userInput');
+            const text = input.value.trim();
+            if (!text) return;
+
+            const activeChat = chats.find(c => c.id === currentChatId);
+            if (activeChat && activeChat.name === "Ny chatt") {
+                activeChat.name = text.length > 20 ? text.substring(0, 20) + '...' : text;
+                saveAndRender();
+            }
+
+            addMessageToCurrentChat('user', text);
+            addMessageToDom('user', text);
+            input.value = '';
+            toggleSendBtn();
+
+            // Visa tänkande-indikator (våg-prickarna)
+            const typingId = showTypingIndicator();
+
+            const lowerText = text.toLowerCase();
+            
+            // 1. Säkerhetskontroll
+            const forbiddenWords = ["naken", "porr", "sex", "våld", "vapen", "blod", "döda", "slå", "nazi", "terror"];
+            if (forbiddenWords.some(word => lowerText.includes(word))) {
+                removeTypingIndicator(typingId);
+                const replyText = "Det här innehållet kan jag inte hjälpa till med. Låt oss hålla en god ton!";
+                addMessageToCurrentChat('bot', replyText);
+                addMessageToDom('bot', replyText);
+                return;
+            }
+
+            // 2. Vad kan du göra / Identitet
+            if (lowerText.includes("vad kan du göra") || lowerText.includes("hjälp") || lowerText.includes("funktioner")) {
+                removeTypingIndicator(typingId);
+                const replyText = "Jag är Chatnova (utvecklad av Blueforge studios och redforge studios). Här är vad jag kan göra:\n\n" +
+                                  "1. 🧠 Svara på frågor och diskutera idéer.\n" +
+                                  "2. 🧮 Räkna ut mattetal (t.ex. 'vad är 154 * 23').\n" +
+                                  "3. 🖼️ Generera coola AI-bilder (skriv t.ex. 'generera en bild på en rymdraket').\n" +
+                                  "4. 💬 Spara dina chattar i menyn till vänster.\n" +
+                                  "5. ⚙️ Växla mellan ljust och mörkt läge.";
+                addMessageToCurrentChat('bot', replyText);
+                addMessageToDom('bot', replyText);
+                return;
+            }
+
+            // 3. Omfrågning av vem som skapat den
+            if (lowerText.includes("vem är du") || lowerText.includes("skapad av") || lowerText.includes("vem har gjort dig")) {
+                removeTypingIndicator(typingId);
+                const replyText = "Jag är Chatnova, en smart AI utvecklad av Blueforge studios och redforge studios!";
+                addMessageToCurrentChat('bot', replyText);
+                addMessageToDom('bot', replyText);
+                return;
+            }
+
+            // 4. Inbyggd matematik-räknare
+            if (/[\d]+[\s]*[\+\-\*\/\%][\s]*[\d]+/.test(text)) {
+                try {
+                    const mathClean = text.replace(/[^0-9+\-*/().]/g, '');
+                    const result = eval(mathClean);
+                    if (result !== undefined && !isNaN(result)) {
+                        removeTypingIndicator(typingId);
+                        const replyText = `Svaret på ${mathClean} är ${result}`;
+                        addMessageToCurrentChat('bot', replyText);
+                        addMessageToDom('bot', replyText);
+                        return;
+                    }
+                } catch(e) {}
+            }
+
+            // 5. Bildgenerering
+            if (lowerText.includes("bild") || lowerText.includes("generera") || lowerText.includes("rita") || lowerText.includes("visa") || lowerText.includes("skapa bild")) {
+                removeTypingIndicator(typingId);
+                const promptQuery = text.replace(/generera|bild|på|en|ett|rita|visa|skapa/gi, '').trim();
+                const replyText = `Här är bilden på: "${promptQuery || text}"`;
+                const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(text)}?width=512&height=512&nologo=true`;
+                addMessageToCurrentChat('bot', replyText, imageUrl);
+                addMessageToDom('bot', replyText, imageUrl);
+                return;
+            }
+
+            // 6. AI-svar via öppet API
+            try {
+                const response = await fetch(`https://text.pollinations.ai/${encodeURIComponent(text)}`);
+                let replyText = await response.text();
+                
+                removeTypingIndicator(typingId);
+
+                // Om svaret är tomt, bara '{}', eller för korthugget – ge ett smart standardsvar istället
+                if (!replyText || replyText.trim() === "{}" || replyText.length < 2) {
+                    replyText = "Det var en intressant tanke! Hur vill du gå vidare med det?";
+                }
+
+                addMessageToCurrentChat('bot', replyText);
+                addMessageToDom('bot', replyText);
+            } catch (error) {
+                removeTypingIndicator(typingId);
+                const fallbackText = "Här är jag! Vad vill du prata om eller ha hjälp med?";
+                addMessageToCurrentChat('bot', fallbackText);
+                addMessageToDom('bot', fallbackText);
+            }
+        }
+
+        function showTypingIndicator() {
+            const div = document.getElementById('chatMessages');
+            const id = 'typing-' + Date.now();
+            div.innerHTML += `
+                <div class="message-wrapper bot" id="${id}">
+                    <div class="avatar bot">C</div>
+                    <div class="message">
+                        <div class="typing-indicator">
+                            <span></span>
+                            <span></span>
+                            <span></span>
+                        </div>
+                    </div>
+                </div>
+            `;
+            div.scrollTop = div.scrollHeight;
+            return id;
+        }
+
+        function removeTypingIndicator(id) {
+            const element = document.getElementById(id);
+            if (element) element.remove();
+        }
+
+        function addMessageToCurrentChat(sender, text, imageUrl=null) {
+            const chat = chats.find(c => c.id === currentChatId);
+            chat.messages.push({ sender, text, imageUrl });
+            localStorage.setItem('chatnova_chats', JSON.stringify(chats));
+        }
+
+        function addMessageToDom(sender, text, imageUrl=null) {
+            const div = document.getElementById('chatMessages');
+            const avatarChar = sender === 'user' ? 'U' : 'C';
+            
+            let imageHtml = imageUrl ? `<br><img src="${imageUrl}" class="generated-image" alt="AI Genererad bild">` : '';
+
+            div.innerHTML += `
+                <div class="message-wrapper ${sender}">
+                    <div class="avatar ${sender}">${avatarChar}</div>
+                    <div class="message">${text}${imageHtml}</div>
+                </div>
+            `;
+            div.scrollTop = div.scrollHeight;
+        }
+
+        function handleKeyPress(e) { if (e.key === 'Enter') sendMessage(); }
+        function openSettings() { document.getElementById('settingsModal').style.display = 'flex'; closeSidebar(); }
+        function closeSettings() { document.getElementById('settingsModal').style.display = 'none'; }
+        function changeTheme(theme) {
+            if (theme === 'light') document.body.classList.add('light');
+            else document.body.classList.remove('light');
+            localStorage.setItem('chatnova_theme', theme);
+        }
+        function switchAccount() { alert("Loggar ut... Byt konto."); }
+
+        const savedTheme = localStorage.getItem('chatnova_theme');
+        if (savedTheme) { changeTheme(savedTheme); document.getElementById('themeSelect').value = savedTheme; }
+
+        renderChatList();
+        renderMessages(chats[0].messages);
+    </script>
+</body>
+</html>
